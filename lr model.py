@@ -1,274 +1,274 @@
-# Import necessary libraries
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Machine Learning libraries
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             f1_score, confusion_matrix, classification_report,
-                             roc_auc_score, roc_curve)
-
-# Load the dataset
-def load_data(filepath):
-    """
-    Load the dataset from a CSV file.
-
-    Parameters:
-        filepath (str): Path to the CSV file.
-
-    Returns:
-        pd.DataFrame: Loaded dataset.
-    """
-    data = pd.read_csv(filepath)
-    return data
-
-# Data Cleaning
-def preprocess_data(data):
-    """
-    Preprocess the dataset by cleaning, encoding, and scaling.
-
-    Parameters:
-        data (pd.DataFrame): The raw dataset.
-
-    Returns:
-        pd.DataFrame: Preprocessed feature matrix X.
-        pd.Series: Target vector y.
-    """
-    # Drop unnecessary columns
-    data = data.drop(['RowNumber', 'CustomerId', 'Surname'], axis=1)
-
-    # Encode Gender
-    data['Gender'] = data['Gender'].map({'Male': 1, 'Female': 0})
-
-    # One-Hot Encode Geography
-    data = pd.get_dummies(data, columns=['Geography'], drop_first=True)
-
-    # Define features and target
-    X = data.drop('Exited', axis=1)
-    y = data['Exited']
-
-    # Feature Scaling
-    scaler = StandardScaler()
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-    X[numeric_features] = scaler.fit_transform(X[numeric_features])
-
-    return X, y
-
-
-def split_data(X, y, test_size=0.2, random_state=42):
-    """
-    Split the dataset into training and testing sets.
-
-    Parameters:
-        X (pd.DataFrame): Feature matrix.
-        y (pd.Series): Target vector.
-        test_size (float): Proportion of the dataset to include in the test split.
-        random_state (int): Random seed.
-
-    Returns:
-        X_train, X_test, y_train, y_test: Split datasets.
-    """
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, stratify=y, random_state=random_state
-    )
-    return X_train, X_test, y_train, y_test
-
-
-def train_logistic_regression(X_train, y_train):
-    """
-    Train a Logistic Regression model.
-
-    Parameters:
-        X_train (pd.DataFrame): Training feature matrix.
-        y_train (pd.Series): Training target vector.
-
-    Returns:
-        LogisticRegression: Trained Logistic Regression model.
-    """
-    lr_model = LogisticRegression(max_iter=1000, random_state=42)
-    lr_model.fit(X_train, y_train)
-    return lr_model
-
-
-def evaluate_model(model, X_test, y_test):
-    """
-    Evaluate the trained model on the test set.
-
-    Parameters:
-        model: Trained machine learning model.
-        X_test (pd.DataFrame): Testing feature matrix.
-        y_test (pd.Series): Testing target vector.
-
-    Returns:
-        None
-    """
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1]
-
-    # Calculate evaluation metrics
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred)
-    recall = recall_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred)
-    auc = roc_auc_score(y_test, y_prob)
-
-    # Print evaluation metrics
-    print("Model Evaluation Metrics:")
-    print("-------------------------")
-    print(f"Accuracy       : {accuracy * 100:.2f}%")
-    print(f"Precision      : {precision * 100:.2f}%")
-    print(f"Recall         : {recall * 100:.2f}%")
-    print(f"F1 Score       : {f1 * 100:.2f}%")
-    print(f"ROC AUC Score  : {auc * 100:.2f}%\n")
-    print("Classification Report:")
-    print(classification_report(y_test, y_pred))
-
-    # Confusion Matrix
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(6, 4))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title('Confusion Matrix')
-    plt.ylabel('Actual Label')
-    plt.xlabel('Predicted Label')
-    plt.show()
-
-    # ROC Curve
-    fpr, tpr, thresholds = roc_curve(y_test, y_prob)
-    plt.figure(figsize=(6, 4))
-    plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {auc * 100:.2f}%)')
-    plt.plot([0, 1], [0, 1], linestyle='--')
-    plt.title('Receiver Operating Characteristic (ROC) Curve')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.legend(loc="lower right")
-    plt.show()
-
-
-def cross_validate_model(model, X_train, y_train, cv=5):
-    """
-    Perform cross-validation on the training set.
-
-    Parameters:
-        model: Machine learning model.
-        X_train (pd.DataFrame): Training feature matrix.
-        y_train (pd.Series): Training target vector.
-        cv (int): Number of cross-validation folds.
-
-    Returns:
-        None
-    """
-    cv_scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='f1')
-    print(f"Cross-Validation F1 Scores: {cv_scores}")
-    print(f"Average F1 Score: {np.mean(cv_scores):.4f}")
-
-
-def save_model(model, filename='logistic_regression_model.pkl'):
-    """
-    Save the trained model to a file.
-
-    Parameters:
-        model: Trained machine learning model.
-        filename (str): Name of the file to save the model.
-
-    Returns:
-        None
-    """
-    import joblib
-    joblib.dump(model, filename)
-    print(f"Model saved to {filename}")
-
-
-def load_model(filename='logistic_regression_model.pkl'):
-    """
-    Load a trained model from a file.
-
-    Parameters:
-        filename (str): Name of the file containing the saved model.
-
-    Returns:
-        Loaded machine learning model.
-    """
-    import joblib
-    model = joblib.load(filename)
-    print(f"Model loaded from {filename}")
-    return model
-
-
-def predict_churn(model, scaler, customer_data):
-    """
-    Predict churn for a new customer.
-
-    Parameters:
-        model: Trained machine learning model.
-        scaler: Fitted scaler object.
-        customer_data (pd.DataFrame): Data for the new customer(s).
-
-    Returns:
-        np.array: Predictions (0 or 1).
-    """
-    # Preprocess customer data
-    # Assume customer_data is a DataFrame with the same features as X_test
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-    customer_data[numeric_features] = scaler.transform(customer_data[numeric_features])
-
-    # Predict churn
-    predictions = model.predict(customer_data)
-    return predictions
-
-
-def main():
-    # Step 1: Load the data
-    data = load_data('Churn_Modelling.csv')
-
-    # Step 2: Preprocess the data
-    X, y = preprocess_data(data)
-
-    # Step 3: Split the data
-    X_train, X_test, y_train, y_test = split_data(X, y)
-
-    # Step 4: Train the Logistic Regression model
-    lr_model = train_logistic_regression(X_train, y_train)
-
-    # Step 5: Evaluate the model
-    evaluate_model(lr_model, X_test, y_test)
-
-    # Step 6: Cross-Validate the model
-    cross_validate_model(lr_model, X_train, y_train)
-
-    # Step 7: Save the model
-    save_model(lr_model)
-
-    # (Optional) Step 8: Load the model and make a prediction
-    loaded_model = load_model()
-
-    # Example customer data for prediction
-    # Create a DataFrame with one customer (replace with actual values)
-    customer_data = pd.DataFrame({
-        'CreditScore': [600],
-        'Gender': [1],  # 1 for Male, 0 for Female
-        'Age': [40],
-        'Tenure': [3],
-        'Balance': [60000],
-        'NumOfProducts': [2],
-        'HasCrCard': [1],
-        'IsActiveMember': [1],
-        'EstimatedSalary': [50000],
-        'Geography_Germany': [0],  # One-Hot Encoded
-        'Geography_Spain': [1]  # One-Hot Encoded
-    })
-
-    # Preprocess and predict
-    scaler = StandardScaler()
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-    scaler.fit(X[numeric_features])  # Fit scaler on the entire dataset
-
-    prediction = predict_churn(loaded_model, scaler, customer_data)
-    print(f"Churn Prediction for the new customer: {'Churn' if prediction[0] == 1 else 'No Churn'}")
-
-
-if __name__ == "__main__":
-    main()
+# # Import necessary libraries
+# import pandas as pd
+# import numpy as np
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+#
+# # Machine Learning libraries
+# from sklearn.model_selection import train_test_split, cross_val_score
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.linear_model import LogisticRegression
+# from sklearn.metrics import (accuracy_score, precision_score, recall_score,
+#                              f1_score, confusion_matrix, classification_report,
+#                              roc_auc_score, roc_curve)
+#
+# # Load the dataset
+# def load_data(filepath):
+#     """
+#     Load the dataset from a CSV file.
+#
+#     Parameters:
+#         filepath (str): Path to the CSV file.
+#
+#     Returns:
+#         pd.DataFrame: Loaded dataset.
+#     """
+#     data = pd.read_csv(filepath)
+#     return data
+#
+# # Data Cleaning
+# def preprocess_data(data):
+#     """
+#     Preprocess the dataset by cleaning, encoding, and scaling.
+#
+#     Parameters:
+#         data (pd.DataFrame): The raw dataset.
+#
+#     Returns:
+#         pd.DataFrame: Preprocessed feature matrix X.
+#         pd.Series: Target vector y.
+#     """
+#     # Drop unnecessary columns
+#     data = data.drop(['RowNumber', 'CustomerId', 'Surname'], axis=1)
+#
+#     # Encode Gender
+#     data['Gender'] = data['Gender'].map({'Male': 1, 'Female': 0})
+#
+#     # One-Hot Encode Geography
+#     data = pd.get_dummies(data, columns=['Geography'], drop_first=True)
+#
+#     # Define features and target
+#     X = data.drop('Exited', axis=1)
+#     y = data['Exited']
+#
+#     # Feature Scaling
+#     scaler = StandardScaler()
+#     numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+#     X[numeric_features] = scaler.fit_transform(X[numeric_features])
+#
+#     return X, y
+#
+#
+# def split_data(X, y, test_size=0.2, random_state=42):
+#     """
+#     Split the dataset into training and testing sets.
+#
+#     Parameters:
+#         X (pd.DataFrame): Feature matrix.
+#         y (pd.Series): Target vector.
+#         test_size (float): Proportion of the dataset to include in the test split.
+#         random_state (int): Random seed.
+#
+#     Returns:
+#         X_train, X_test, y_train, y_test: Split datasets.
+#     """
+#     X_train, X_test, y_train, y_test = train_test_split(
+#         X, y, test_size=test_size, stratify=y, random_state=random_state
+#     )
+#     return X_train, X_test, y_train, y_test
+#
+#
+# def train_logistic_regression(X_train, y_train):
+#     """
+#     Train a Logistic Regression model.
+#
+#     Parameters:
+#         X_train (pd.DataFrame): Training feature matrix.
+#         y_train (pd.Series): Training target vector.
+#
+#     Returns:
+#         LogisticRegression: Trained Logistic Regression model.
+#     """
+#     lr_model = LogisticRegression(max_iter=1000, random_state=42)
+#     lr_model.fit(X_train, y_train)
+#     return lr_model
+#
+#
+# def evaluate_model(model, X_test, y_test):
+#     """
+#     Evaluate the trained model on the test set.
+#
+#     Parameters:
+#         model: Trained machine learning model.
+#         X_test (pd.DataFrame): Testing feature matrix.
+#         y_test (pd.Series): Testing target vector.
+#
+#     Returns:
+#         None
+#     """
+#     y_pred = model.predict(X_test)
+#     y_prob = model.predict_proba(X_test)[:, 1]
+#
+#     # Calculate evaluation metrics
+#     accuracy = accuracy_score(y_test, y_pred)
+#     precision = precision_score(y_test, y_pred)
+#     recall = recall_score(y_test, y_pred)
+#     f1 = f1_score(y_test, y_pred)
+#     auc = roc_auc_score(y_test, y_prob)
+#
+#     # Print evaluation metrics
+#     print("Model Evaluation Metrics:")
+#     print("-------------------------")
+#     print(f"Accuracy       : {accuracy * 100:.2f}%")
+#     print(f"Precision      : {precision * 100:.2f}%")
+#     print(f"Recall         : {recall * 100:.2f}%")
+#     print(f"F1 Score       : {f1 * 100:.2f}%")
+#     print(f"ROC AUC Score  : {auc * 100:.2f}%\n")
+#     print("Classification Report:")
+#     print(classification_report(y_test, y_pred))
+#
+#     # Confusion Matrix
+#     cm = confusion_matrix(y_test, y_pred)
+#     plt.figure(figsize=(6, 4))
+#     sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+#     plt.title('Confusion Matrix')
+#     plt.ylabel('Actual Label')
+#     plt.xlabel('Predicted Label')
+#     plt.show()
+#
+#     # ROC Curve
+#     fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+#     plt.figure(figsize=(6, 4))
+#     plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {auc * 100:.2f}%)')
+#     plt.plot([0, 1], [0, 1], linestyle='--')
+#     plt.title('Receiver Operating Characteristic (ROC) Curve')
+#     plt.xlabel('False Positive Rate')
+#     plt.ylabel('True Positive Rate')
+#     plt.legend(loc="lower right")
+#     plt.show()
+#
+#
+# def cross_validate_model(model, X_train, y_train, cv=5):
+#     """
+#     Perform cross-validation on the training set.
+#
+#     Parameters:
+#         model: Machine learning model.
+#         X_train (pd.DataFrame): Training feature matrix.
+#         y_train (pd.Series): Training target vector.
+#         cv (int): Number of cross-validation folds.
+#
+#     Returns:
+#         None
+#     """
+#     cv_scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='f1')
+#     print(f"Cross-Validation F1 Scores: {cv_scores}")
+#     print(f"Average F1 Score: {np.mean(cv_scores):.4f}")
+#
+#
+# def save_model(model, filename='logistic_regression_model.pkl'):
+#     """
+#     Save the trained model to a file.
+#
+#     Parameters:
+#         model: Trained machine learning model.
+#         filename (str): Name of the file to save the model.
+#
+#     Returns:
+#         None
+#     """
+#     import joblib
+#     joblib.dump(model, filename)
+#     print(f"Model saved to {filename}")
+#
+#
+# def load_model(filename='logistic_regression_model.pkl'):
+#     """
+#     Load a trained model from a file.
+#
+#     Parameters:
+#         filename (str): Name of the file containing the saved model.
+#
+#     Returns:
+#         Loaded machine learning model.
+#     """
+#     import joblib
+#     model = joblib.load(filename)
+#     print(f"Model loaded from {filename}")
+#     return model
+#
+#
+# def predict_churn(model, scaler, customer_data):
+#     """
+#     Predict churn for a new customer.
+#
+#     Parameters:
+#         model: Trained machine learning model.
+#         scaler: Fitted scaler object.
+#         customer_data (pd.DataFrame): Data for the new customer(s).
+#
+#     Returns:
+#         np.array: Predictions (0 or 1).
+#     """
+#     # Preprocess customer data
+#     # Assume customer_data is a DataFrame with the same features as X_test
+#     numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+#     customer_data[numeric_features] = scaler.transform(customer_data[numeric_features])
+#
+#     # Predict churn
+#     predictions = model.predict(customer_data)
+#     return predictions
+#
+#
+# def main():
+#     # Step 1: Load the data
+#     data = load_data('Churn_Modelling.csv')
+#
+#     # Step 2: Preprocess the data
+#     X, y = preprocess_data(data)
+#
+#     # Step 3: Split the data
+#     X_train, X_test, y_train, y_test = split_data(X, y)
+#
+#     # Step 4: Train the Logistic Regression model
+#     lr_model = train_logistic_regression(X_train, y_train)
+#
+#     # Step 5: Evaluate the model
+#     evaluate_model(lr_model, X_test, y_test)
+#
+#     # Step 6: Cross-Validate the model
+#     cross_validate_model(lr_model, X_train, y_train)
+#
+#     # Step 7: Save the model
+#     save_model(lr_model)
+#
+#     # (Optional) Step 8: Load the model and make a prediction
+#     loaded_model = load_model()
+#
+#     # Example customer data for prediction
+#     # Create a DataFrame with one customer (replace with actual values)
+#     customer_data = pd.DataFrame({
+#         'CreditScore': [600],
+#         'Gender': [1],  # 1 for Male, 0 for Female
+#         'Age': [40],
+#         'Tenure': [3],
+#         'Balance': [60000],
+#         'NumOfProducts': [2],
+#         'HasCrCard': [1],
+#         'IsActiveMember': [1],
+#         'EstimatedSalary': [50000],
+#         'Geography_Germany': [0],  # One-Hot Encoded
+#         'Geography_Spain': [1]  # One-Hot Encoded
+#     })
+#
+#     # Preprocess and predict
+#     scaler = StandardScaler()
+#     numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+#     scaler.fit(X[numeric_features])  # Fit scaler on the entire dataset
+#
+#     prediction = predict_churn(loaded_model, scaler, customer_data)
+#     print(f"Churn Prediction for the new customer: {'Churn' if prediction[0] == 1 else 'No Churn'}")
+#
+#
+# if __name__ == "__main__":
+#     main()

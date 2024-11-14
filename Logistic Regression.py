@@ -48,23 +48,23 @@ def preprocess_data(data):
     data = pd.get_dummies(data, columns=['Card Type', 'Geography'], drop_first=True)
 
     # Define features and target
-    X = data.drop('Exited', axis=1)
+    x = data.drop('Exited', axis=1)
     y = data['Exited']
 
     # Feature Scaling
     scaler = StandardScaler()
     numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-    X[numeric_features] = scaler.fit_transform(X[numeric_features])
+    x[numeric_features] = scaler.fit_transform(x[numeric_features])
 
-    return X, y
+    return x, y
 
 
-def split_data(X, y, test_size=0.2, random_state=42):
+def split_data(x, y, test_size=0.2, random_state=42):
     """
     Split the dataset into training and testing sets.
 
     Parameters:
-        X (pd.DataFrame): Feature matrix.
+        x (pd.DataFrame): Feature matrix.
         y (pd.Series): Target vector.
         test_size (float): Proportion of the dataset to include in the test split.
         random_state (int): Random seed.
@@ -72,25 +72,25 @@ def split_data(X, y, test_size=0.2, random_state=42):
     Returns:
         X_train, X_test, y_train, y_test: Split datasets.
     """
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, stratify=y, random_state=random_state
+    x_train, X_test, y_train, y_test = train_test_split(
+        x, y, test_size=test_size, stratify=y, random_state=random_state
     )
-    return X_train, X_test, y_train, y_test
+    return x_train, X_test, y_train, y_test
 
 
-def train_logistic_regression(X_train, y_train):
+def train_logistic_regression(x_train, y_train):
     """
     Train a Logistic Regression model.
 
     Parameters:
-        X_train (pd.DataFrame): Training feature matrix.
+        x_train (pd.DataFrame): Training feature matrix.
         y_train (pd.Series): Training target vector.
 
     Returns:
         LogisticRegression: Trained Logistic Regression model.
     """
     lr_model = LogisticRegression(max_iter=1000, random_state=42)
-    lr_model.fit(X_train, y_train)
+    lr_model.fit(x_train, y_train)
     return lr_model
 
 
