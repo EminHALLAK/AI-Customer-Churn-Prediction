@@ -11,6 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
                              f1_score, confusion_matrix, classification_report,
                              roc_auc_score, roc_curve)
+from imblearn.over_sampling import SMOTE  # Import SMOTE for handling class imbalance
 
 # Load the dataset
 def load_data(filepath):
@@ -40,31 +41,26 @@ def preprocess_data(data):
     """
     # Drop unnecessary columns
     data = data.drop(['RowNumber', 'CustomerId', 'Surname'], axis=1)
+    data = data.drop(['Complain'], axis=1)  # Remove 'Complain' to avoid data leakage
 
     # Encode Gender
     data['Gender'] = data['Gender'].map({'Male': 1, 'Female': 0})
 
-    # One-Hot Encode Geography
+    # One-Hot Encode Geography and Card Type
     data = pd.get_dummies(data, columns=['Card Type', 'Geography'], drop_first=True)
 
     # Define features and target
-    x = data.drop('Exited', axis=1)
+    X = data.drop('Exited', axis=1)
     y = data['Exited']
 
-    # Feature Scaling
-    scaler = StandardScaler()
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-    x[numeric_features] = scaler.fit_transform(x[numeric_features])
+    return X, y
 
-    return x, y
-
-
-def split_data(x, y, test_size=0.2, random_state=42):
+def split_data(X, y, test_size=0.2, random_state=42):
     """
     Split the dataset into training and testing sets.
 
     Parameters:
-        x (pd.DataFrame): Feature matrix.
+        X (pd.DataFrame): Feature matrix.
         y (pd.Series): Target vector.
         test_size (float): Proportion of the dataset to include in the test split.
         random_state (int): Random seed.
@@ -72,29 +68,59 @@ def split_data(x, y, test_size=0.2, random_state=42):
     Returns:
         X_train, X_test, y_train, y_test: Split datasets.
     """
-    x_train, X_test, y_train, y_test = train_test_split(
-        x, y, test_size=test_size, stratify=y, random_state=random_state
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, stratify=y, random_state=random_state
     )
-    return x_train, X_test, y_train, y_test
+    return X_train, X_test, y_train, y_test
 
+def handle_class_imbalance(X_train, y_train):
+    """
+    Handle class imbalance using SMOTE.
 
-def train_logistic_regression(x_train, y_train):
+    Parameters:
+        X_train (pd.DataFrame): Training feature matrix.
+        y_train (pd.Series): Training target vector.
+
+    Returns:
+        X_resampled, y_resampled: Resampled training data.
+    """
+    smote = SMOTE(random_state=42)
+    X_resampled, y_resampled = smote.fit_resample(X_train, y_train)
+    return X_resampled, y_resampled
+
+def scale_features(X_train, X_test, features_to_scale):
+    """
+    Scale numeric features using StandardScaler.
+
+    Parameters:
+        X_train (pd.DataFrame): Training feature matrix.
+        X_test (pd.DataFrame): Testing feature matrix.
+        features_to_scale (list): List of feature names to scale.
+
+    Returns:
+        X_train_scaled, X_test_scaled, scaler: Scaled feature matrices and scaler object.
+    """
+    scaler = StandardScaler()
+    X_train[features_to_scale] = scaler.fit_transform(X_train[features_to_scale])
+    X_test[features_to_scale] = scaler.transform(X_test[features_to_scale])
+    return X_train, X_test, scaler
+
+def train_logistic_regression(X_train, y_train):
     """
     Train a Logistic Regression model.
 
     Parameters:
-        x_train (pd.DataFrame): Training feature matrix.
+        X_train (pd.DataFrame): Training feature matrix.
         y_train (pd.Series): Training target vector.
 
     Returns:
         LogisticRegression: Trained Logistic Regression model.
     """
     lr_model = LogisticRegression(max_iter=1000, random_state=42)
-    lr_model.fit(x_train, y_train)
+    lr_model.fit(X_train, y_train)
     return lr_model
 
-
-def evaluate_model(model, X_test, y_test):
+def evaluate_model(model, X_test, y_test, threshold=0.5):
     """
     Evaluate the trained model on the test set.
 
@@ -102,12 +128,13 @@ def evaluate_model(model, X_test, y_test):
         model: Trained machine learning model.
         X_test (pd.DataFrame): Testing feature matrix.
         y_test (pd.Series): Testing target vector.
+        threshold (float): Classification threshold.
 
     Returns:
         None
     """
-    y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1]
+    y_pred = (y_prob >= threshold).astype(int)
 
     # Calculate evaluation metrics
     accuracy = accuracy_score(y_test, y_pred)
@@ -119,6 +146,7 @@ def evaluate_model(model, X_test, y_test):
     # Print evaluation metrics
     print("Model Evaluation Metrics:")
     print("-------------------------")
+    print(f"Threshold      : {threshold}")
     print(f"Accuracy       : {accuracy * 100:.2f}%")
     print(f"Precision      : {precision * 100:.2f}%")
     print(f"Recall         : {recall * 100:.2f}%")
@@ -126,27 +154,6 @@ def evaluate_model(model, X_test, y_test):
     print(f"ROC AUC Score  : {auc * 100:.2f}%\n")
     print("Classification Report:")
     print(classification_report(y_test, y_pred))
-
-    # Confusion Matrix
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(6, 4))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title('Confusion Matrix')
-    plt.ylabel('Actual Label')
-    plt.xlabel('Predicted Label')
-    plt.show()
-
-    # ROC Curve
-    fpr, tpr, thresholds = roc_curve(y_test, y_prob)
-    plt.figure(figsize=(6, 4))
-    plt.plot(fpr, tpr, label=f'ROC Curve (AUC = {auc * 100:.2f}%)')
-    plt.plot([0, 1], [0, 1], linestyle='--')
-    plt.title('Receiver Operating Characteristic (ROC) Curve')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.legend(loc="lower right")
-    plt.show()
-
 
 def cross_validate_model(model, X_train, y_train, cv=5):
     """
@@ -165,7 +172,6 @@ def cross_validate_model(model, X_train, y_train, cv=5):
     print(f"Cross-Validation F1 Scores: {cv_scores}")
     print(f"Average F1 Score: {np.mean(cv_scores):.4f}")
 
-
 def save_model(model, filename='logistic_regression_model.pkl'):
     """
     Save the trained model to a file.
@@ -180,7 +186,6 @@ def save_model(model, filename='logistic_regression_model.pkl'):
     import joblib
     joblib.dump(model, filename)
     print(f"Model saved to {filename}")
-
 
 def load_model(filename='logistic_regression_model.pkl'):
     """
@@ -197,42 +202,7 @@ def load_model(filename='logistic_regression_model.pkl'):
     print(f"Model loaded from {filename}")
     return model
 
-
-# def predict_churn(model, scaler, customer_data, X_train_columns):
-#     """
-#     Predict churn for a new customer, ensuring all required features are included.
-#
-#     Parameters:
-#         model: Trained machine learning model.
-#         scaler: Fitted scaler object.
-#         customer_data (pd.DataFrame): Data for the new customer(s).
-#         X_train_columns (list): Column names used during model training.
-#
-#     Returns:
-#         np.array: Predictions (0 or 1).
-#     """
-#     # Step 1: Ensure customer_data has the same features as the training data
-#     # One-Hot Encode Geography and Card Type (same as preprocessing step)
-#     # Here, we assume 'Card Type' and 'Geography' columns are not in the customer_data
-#     customer_data = pd.get_dummies(customer_data, columns=['Card Type', 'Geography'], drop_first=True)
-#
-#     # Step 2: Align columns - Add missing columns from the training data
-#     missing_cols = set(X_train_columns) - set(customer_data.columns)
-#     for col in missing_cols:
-#         customer_data[col] = 0  # Add missing columns with value 0
-#
-#     # Step 3: Ensure the columns are in the same order as the training data
-#     customer_data = customer_data[X_train_columns]
-#
-#     # Step 4: Feature scaling (scaling only the numeric columns)
-#     numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-#     customer_data[numeric_features] = scaler.transform(customer_data[numeric_features])
-#
-#     # Step 5: Predict churn
-#     predictions = model.predict(customer_data)
-#     return predictions
-
-def predict_churn(model, scaler, customer_data, X_train_columns, features_to_scale):
+def predict_churn(model, scaler, customer_data, X_train_columns, features_to_scale, threshold=0.5):
     """
     Predict churn for a new customer, ensuring all required features are included.
 
@@ -242,32 +212,29 @@ def predict_churn(model, scaler, customer_data, X_train_columns, features_to_sca
         customer_data (pd.DataFrame): Data for the new customer(s).
         X_train_columns (list): Column names used during model training.
         features_to_scale (list): List of features to scale.
+        threshold (float): Classification threshold.
 
     Returns:
-        np.array: Predictions (0 or 1).
+        int: Prediction (0 or 1).
+        float: Predicted probability of churn.
     """
-    # Step 1: Ensure customer_data has the same features as the training data
-
-    # Step 2: Align columns - Add missing columns from the training data
+    # Align columns with training data
     missing_cols = set(X_train_columns) - set(customer_data.columns)
     for col in missing_cols:
-        customer_data[col] = 0  # Add missing columns with value 0
+        customer_data[col] = 0  # Add missing columns with default value 0
 
-    # Step 3: Ensure the columns are in the same order as the training data
     customer_data = customer_data[X_train_columns].copy()
 
-    # Step 4: Feature scaling (scaling only specified numeric columns)
+    # Scale numeric features
+    customer_data[features_to_scale] = scaler.transform(customer_data[features_to_scale])
 
-    # Ensure the columns are of float64 type before scaling
-    customer_data.loc[:, features_to_scale] = customer_data.loc[:, features_to_scale].astype('float64')
+    # Predict probability
+    prob = model.predict_proba(customer_data)[:, 1][0]
 
-    # Apply scaling to specified features
-    customer_data.loc[:, features_to_scale] = scaler.transform(customer_data[features_to_scale])
+    # Make prediction based on threshold
+    prediction = int(prob >= threshold)
 
-    # Step 5: Predict churn
-    predictions = model.predict(customer_data)
-    return predictions
-
+    return prediction, prob
 
 def main():
     # Step 1: Load the data
@@ -279,26 +246,36 @@ def main():
     # Step 3: Split the data
     X_train, X_test, y_train, y_test = split_data(X, y)
 
-    # Step 4: Train the Logistic Regression model
-    lr_model = train_logistic_regression(X_train, y_train)
+    # Step 4: Handle class imbalance using SMOTE
+    X_train_resampled, y_train_resampled = handle_class_imbalance(X_train, y_train)
 
-    # Step 5: Evaluate the model
-    evaluate_model(lr_model, X_test, y_test)
+    # Step 5: Scale features
+    features_to_scale = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+    X_train_resampled, X_test, scaler = scale_features(X_train_resampled, X_test, features_to_scale)
 
-    # Step 6: Cross-Validate the model
-    cross_validate_model(lr_model, X_train, y_train)
+    # Step 6: Train the Logistic Regression model
+    lr_model = train_logistic_regression(X_train_resampled, y_train_resampled)
 
-    # Step 7: Save the model
+    # Step 7: Evaluate the model at different thresholds
+    print("Evaluating model at different thresholds:")
+    thresholds = [0.3, 0.5, 0.7]
+    for threshold in thresholds:
+        print(f"\n--- Threshold: {threshold} ---")
+        evaluate_model(lr_model, X_test, y_test, threshold=threshold)
+
+    # Step 8: Cross-Validate the model
+    cross_validate_model(lr_model, X_train_resampled, y_train_resampled)
+
+    # Step 9: Save the model
     save_model(lr_model)
 
-    # (Optional) Step 8: Load the model and make a prediction
+    # Load the model
     loaded_model = load_model()
 
-    # Example customer data for prediction
-    # Create a DataFrame with one customer (replace with actual values)
+    # Prepare customer data
     customer_data_churn = pd.DataFrame({
         'CreditScore': [450],
-        'Gender': [1],  # 1 for Male, 0 for Female
+        'Gender': [1],
         'Age': [65],
         'Tenure': [1],
         'Balance': [0],
@@ -312,23 +289,9 @@ def main():
         'Card Type_GOLD': [1]
     })
 
-    # Preprocess and predict
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-
-    # Ensure numeric features are of type float64
-    customer_data_churn[numeric_features] = customer_data_churn[numeric_features].astype('float64')
-
-    # Preprocess and predict
-    features_to_scale = ['Age', 'Balance']  # Define features to scale
-    scaler = StandardScaler()
-    scaler.fit(X[features_to_scale])  # Fit scaler on selected features
-
-    prediction = predict_churn(loaded_model, scaler, customer_data_churn, X_train.columns, features_to_scale)
-    print(f"Churn Prediction for the new customer: {'Churn' if prediction[0] == 1 else 'No Churn'}")
-
     customer_data_not_churn = pd.DataFrame({
         'CreditScore': [850],
-        'Gender': [0],  # 1 for Male, 0 for Female
+        'Gender': [0],
         'Age': [30],
         'Tenure': [10],
         'Balance': [150000],
@@ -342,19 +305,27 @@ def main():
         'Card Type_GOLD': [0]
     })
 
-    # Preprocess and predict
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-
     # Ensure numeric features are of type float64
+    numeric_features = features_to_scale
+    customer_data_churn[numeric_features] = customer_data_churn[numeric_features].astype('float64')
     customer_data_not_churn[numeric_features] = customer_data_not_churn[numeric_features].astype('float64')
 
-    # Preprocess and predict
-    features_to_scale = ['Age', 'Balance']  # Define features to scale
-    scaler = StandardScaler()
-    scaler.fit(X[features_to_scale])  # Fit scaler on selected features
+    # Predict churn for both customers
+    custom_threshold = 0.6  # Adjust the threshold based on evaluation
 
-    prediction = predict_churn(loaded_model, scaler, customer_data_not_churn, X_train.columns, features_to_scale)
-    print(f"Churn Prediction for the new customer: {'Churn' if prediction[0] == 1 else 'No Churn'}")
+    # For customer likely to churn
+    prediction_churn, prob_churn = predict_churn(
+        loaded_model, scaler, customer_data_churn, X_train.columns, features_to_scale, threshold=custom_threshold
+    )
+    print(f"\nCustomer Likely to Churn - Predicted Probability: {prob_churn:.4f}")
+    print(f"Churn Prediction: {'Churn' if prediction_churn == 1 else 'No Churn'}")
+
+    # For customer unlikely to churn
+    prediction_no_churn, prob_no_churn = predict_churn(
+        loaded_model, scaler, customer_data_not_churn, X_train.columns, features_to_scale, threshold=custom_threshold
+    )
+    print(f"\nCustomer Unlikely to Churn - Predicted Probability: {prob_no_churn:.4f}")
+    print(f"Churn Prediction: {'Churn' if prediction_no_churn == 1 else 'No Churn'}")
 
 if __name__ == "__main__":
     main()
