@@ -274,15 +274,15 @@ def main():
 
     # Prepare customer data
     customer_data_churn = pd.DataFrame({
-        'CreditScore': [450],
-        'Gender': [1],
-        'Age': [65],
-        'Tenure': [1],
-        'Balance': [0],
-        'NumOfProducts': [3],
+        'CreditScore': [580],
+        'Gender': [0],  # 0 for Female
+        'Age': [45],
+        'Tenure': [2],
+        'Balance': [50000],
+        'NumOfProducts': [1],
         'HasCrCard': [0],
         'IsActiveMember': [0],
-        'EstimatedSalary': [25000],
+        'EstimatedSalary': [40000],
         'Geography_Germany': [1],
         'Geography_Spain': [0],
         'Card Type_DIAMOND': [0],
@@ -290,15 +290,15 @@ def main():
     })
 
     customer_data_not_churn = pd.DataFrame({
-        'CreditScore': [850],
-        'Gender': [0],
-        'Age': [30],
-        'Tenure': [10],
-        'Balance': [150000],
-        'NumOfProducts': [1],
+        'CreditScore': [750],
+        'Gender': [1],  # 1 for Male
+        'Age': [29],
+        'Tenure': [7],
+        'Balance': [120000],
+        'NumOfProducts': [2],
         'HasCrCard': [1],
         'IsActiveMember': [1],
-        'EstimatedSalary': [120000],
+        'EstimatedSalary': [80000],
         'Geography_Germany': [0],
         'Geography_Spain': [1],
         'Card Type_DIAMOND': [1],
