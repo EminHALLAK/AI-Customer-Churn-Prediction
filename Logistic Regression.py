@@ -232,7 +232,7 @@ def load_model(filename='logistic_regression_model.pkl'):
 #     predictions = model.predict(customer_data)
 #     return predictions
 
-def predict_churn(model, scaler, customer_data, X_train_columns):
+def predict_churn(model, scaler, customer_data, X_train_columns, features_to_scale):
     """
     Predict churn for a new customer, ensuring all required features are included.
 
@@ -241,13 +241,12 @@ def predict_churn(model, scaler, customer_data, X_train_columns):
         scaler: Fitted scaler object.
         customer_data (pd.DataFrame): Data for the new customer(s).
         X_train_columns (list): Column names used during model training.
+        features_to_scale (list): List of features to scale.
 
     Returns:
         np.array: Predictions (0 or 1).
     """
     # Step 1: Ensure customer_data has the same features as the training data
-    # Here, we don't need to apply get_dummies since customer_data should already be in the correct format
-    # We assume the customer_data passed already has the one-hot encoded columns for 'Card Type' and 'Geography'
 
     # Step 2: Align columns - Add missing columns from the training data
     missing_cols = set(X_train_columns) - set(customer_data.columns)
@@ -255,16 +254,15 @@ def predict_churn(model, scaler, customer_data, X_train_columns):
         customer_data[col] = 0  # Add missing columns with value 0
 
     # Step 3: Ensure the columns are in the same order as the training data
-    customer_data = customer_data[X_train_columns]
+    customer_data = customer_data[X_train_columns].copy()
 
-    # Step 4: Feature scaling (scaling only the numeric columns)
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+    # Step 4: Feature scaling (scaling only specified numeric columns)
 
     # Ensure the columns are of float64 type before scaling
-    customer_data[numeric_features] = customer_data[numeric_features].astype('float64')
+    customer_data.loc[:, features_to_scale] = customer_data.loc[:, features_to_scale].astype('float64')
 
-    # Apply scaling
-    customer_data.loc[:, numeric_features] = scaler.transform(customer_data[numeric_features])
+    # Apply scaling to specified features
+    customer_data.loc[:, features_to_scale] = scaler.transform(customer_data[features_to_scale])
 
     # Step 5: Predict churn
     predictions = model.predict(customer_data)
@@ -298,42 +296,65 @@ def main():
 
     # Example customer data for prediction
     # Create a DataFrame with one customer (replace with actual values)
-    customer_data = pd.DataFrame({
-        'CreditScore': [600],
+    customer_data_churn = pd.DataFrame({
+        'CreditScore': [450],
         'Gender': [1],  # 1 for Male, 0 for Female
-        'Age': [40],
-        'Tenure': [3],
-        'Balance': [60000],
-        'NumOfProducts': [2],
-        'HasCrCard': [1],
-        'IsActiveMember': [1],
-        'EstimatedSalary': [500000],
-        'Geography_Germany': [0],  # One-Hot Encoded
-        'Geography_Spain': [1],  # One-Hot Encoded
-        'Card Type_DIAMOND': [0],  # One-Hot Encoded
+        'Age': [65],
+        'Tenure': [1],
+        'Balance': [0],
+        'NumOfProducts': [3],
+        'HasCrCard': [0],
+        'IsActiveMember': [0],
+        'EstimatedSalary': [25000],
+        'Geography_Germany': [1],
+        'Geography_Spain': [0],
+        'Card Type_DIAMOND': [0],
         'Card Type_GOLD': [1]
     })
-    customer_data = pd.DataFrame({
-        'CreditScore': [600],
-        'Gender': [1],  # 1 for Male, 0 for Female
-        'Age': [40],
-        'Tenure': [4],
-        'Balance': [600000],
-        'NumOfProducts': [3],
-        'HasCrCard': [1],
-        'IsActiveMember': [1],
-        'EstimatedSalary': [500000],
-        'Card Type_DIAMOND': [1],  # One-Hot Encoded Column
-        'Geography_Spain': [1]  # One-Hot Encoded Column
-    })
-    # Preprocess and predict
-    scaler = StandardScaler()
-    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
-    scaler.fit(X[numeric_features])  # Fit scaler on the entire dataset
 
-    prediction = predict_churn(loaded_model, scaler, customer_data, X_train.columns)
+    # Preprocess and predict
+    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+
+    # Ensure numeric features are of type float64
+    customer_data_churn[numeric_features] = customer_data_churn[numeric_features].astype('float64')
+
+    # Preprocess and predict
+    features_to_scale = ['Age', 'Balance']  # Define features to scale
+    scaler = StandardScaler()
+    scaler.fit(X[features_to_scale])  # Fit scaler on selected features
+
+    prediction = predict_churn(loaded_model, scaler, customer_data_churn, X_train.columns, features_to_scale)
     print(f"Churn Prediction for the new customer: {'Churn' if prediction[0] == 1 else 'No Churn'}")
 
+    customer_data_not_churn = pd.DataFrame({
+        'CreditScore': [850],
+        'Gender': [0],  # 1 for Male, 0 for Female
+        'Age': [30],
+        'Tenure': [10],
+        'Balance': [150000],
+        'NumOfProducts': [1],
+        'HasCrCard': [1],
+        'IsActiveMember': [1],
+        'EstimatedSalary': [120000],
+        'Geography_Germany': [0],
+        'Geography_Spain': [1],
+        'Card Type_DIAMOND': [1],
+        'Card Type_GOLD': [0]
+    })
+
+    # Preprocess and predict
+    numeric_features = ['CreditScore', 'Age', 'Tenure', 'Balance', 'NumOfProducts', 'EstimatedSalary']
+
+    # Ensure numeric features are of type float64
+    customer_data_not_churn[numeric_features] = customer_data_not_churn[numeric_features].astype('float64')
+
+    # Preprocess and predict
+    features_to_scale = ['Age', 'Balance']  # Define features to scale
+    scaler = StandardScaler()
+    scaler.fit(X[features_to_scale])  # Fit scaler on selected features
+
+    prediction = predict_churn(loaded_model, scaler, customer_data_not_churn, X_train.columns, features_to_scale)
+    print(f"Churn Prediction for the new customer: {'Churn' if prediction[0] == 1 else 'No Churn'}")
 
 if __name__ == "__main__":
     main()
